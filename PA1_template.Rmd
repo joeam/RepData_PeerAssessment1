@@ -1,20 +1,100 @@
-# Reproducible Research: Peer Assessment 1
+Reproducible Research: Peer Assessment 1 - Activity Monitoring Data
+===================================================================
 
 
-## Loading and preprocessing the data
+## Loading the data set and the relevant libraries
+
+```{r}
+library(reshape2)
+library(plyr)
+library(lattice)
+
+if(!file.exists('./activity.csv')){
+     if(!file.exists('./activity.zip')){
+          url <- 'https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip'
+          download.file(url, 'activity.zip', method=ifelse(.Platform$OS.type=="windows", "internal", "curl"))
+     }
+     unzip('activity.zip')
+}
+data <- read.csv('activity.csv')
+
+```
+
+## Reformatting the data set
+```{r}
+melted <- melt(data, id.vars=c("date"))
+```
+
+## Total number of steps taken each day
+```{r steps_per_day, fig.width=14, fig.height=8}
+casted <- dcast(melted[melted$variable=='steps',], date ~ variable, sum)
+par(las=2, mgp=c(4,1,0), mar=c(8,8,4,1), cex.lab=1.2)
+barplot(casted$steps, names.arg=casted$date, cex.names=.7)
+```
+
+### The mean of the total steps taken per day is *`r mean(casted$steps, na.rm=TRUE)`* and the median is *`r median(casted$steps, na.rm=TRUE)`*
+
+intervalMelt <- melt(data, id.vars=c("interval"))
 
 
+## Average daily activity pattern
+```{r average_daily_activity, fig.width=14}
+intervalMelt <- melt(data, id.vars=c("interval"))
+intervalMelt <- intervalMelt[intervalMelt$variable == 'steps',]
+class(intervalMelt$value) <- "integer"
+intervalCasted <- dcast(intervalMelt, interval ~ variable, mean, na.rm=TRUE)
 
-## What is mean total number of steps taken per day?
+plot(intervalCasted$steps, type='l', xlab='Interval', ylab='Number of steps mean', axes=FALSE)
+
+axis(1, at=1:288, labels=intervalCasted$interval)
+```
+
+## The 5-minute interval that contains the maximum number of steps (averaged accross days) is: *`r arrange(intervalCasted, desc(steps))[1,1]`*  
+
+## Inputing missing values
+The missing values will be replaced with the average of the corresponding 5-minutes interval (averaged accross days)
+
+```{r}
+completeCases = complete.cases(data)
+cleanData <- data
+
+for(i in 1:nrow(cleanData)){
+     row = cleanData[i,]
+     if(is.na(row$steps)){
+          cleanData[i, 'steps'] = intervalCasted[intervalCasted$interval == row$interval, 'steps']
+     }
+}
+
+```
 
 
+## Plotting a histogram of the total number of steps per day after inputing the missing values
+```{r steps_per_day_after_data_input, fig.width=14, fig.height=8}
+melted <- melt(cleanData, id.vars=c("date"))
+casted <- dcast(melted[melted$variable=='steps',], date ~ variable, sum)
+par(las=2, mgp=c(4,1,0), mar=c(8,8,4,1), cex.lab=1.2)
+barplot(casted$steps, names.arg=casted$date, cex.names=.7)
+```
 
-## What is the average daily activity pattern?
+### The mean of the total steps taken per day is *`r mean(casted$steps, na.rm=TRUE)`* and the median is *`r median(casted$steps, na.rm=TRUE)`*
+The values are the same as the values obtained with ra.rm = TRUE  
+Which is mathematically correct since the values we added are equal to the mean of each corresponding 5-minute interval 
 
 
+## Difference in activity patterns between weekdays and weekends
+```{r  weekend_vs_weekday, fig.width=13, fig.height=16}
+cleanData <- data
+melted <- melt(cleanData, id.vars=c("date", "interval"))
+melted$date = as.Date(melted$date)
+melted <- cbind(melted, weekdays(melted$date))
+colnames(melted)[5] <- 'weekend'
+melted$weekend <- melted[,'weekend'] == 'Saturday' | melted[,'weekend'] == 'Sunday' 
 
-## Imputing missing values
+casted <- dcast(melted[melted$variable=='steps',], interval + weekend ~ variable, mean, na.rm=TRUE)
+casted[casted$weekend, 'weekend'] = 'weekend'
+casted[casted$weekend == 'FALSE', 'weekend'] = 'weekday'
 
+xyplot(steps ~ interval | weekend, data=casted, type='l', xlab='Interval', ylab='Number of steps')
 
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
